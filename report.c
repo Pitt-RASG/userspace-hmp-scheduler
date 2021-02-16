@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,5 +10,5 @@
 #include <linux/hw_breakpoint.h>
 
 #include <asm/unistd.h>
-#include <sys/sycall.h>
+#include <sys/syscall.h>
 #include <sys/ioctl.h>
