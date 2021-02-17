@@ -114,7 +114,7 @@ static void parse_event_list(char *event_list, size_t num)
 		return;
 	}
 
-	if ((code = armv8pmu_event_type_code(token)) == -1) {
+	if ((code = event_type_code(token)) == -1) {
 		fprintf(stderr, "Unknown event type %s\n", token);
 		exit(-1);
 	}
@@ -124,7 +124,7 @@ static void parse_event_list(char *event_list, size_t num)
 
 	// Write back code and name to counters
 	counters[num].code = code;
-	counters[num].name = armv8pmu_event_type_name(code);
+	counters[num].name = event_type_name(code);
 }
 
 int main(int argc, char *argv[], char *envp[])

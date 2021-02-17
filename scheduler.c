@@ -14,6 +14,7 @@ static void set_counter(struct read_values *restrict v)
 
 		counters[i].val = v->value;
 
+		// [comment this out to stop reporting]
 		printf("%s:%lu\t", counters[i].name, counters[i].val);
 
 		return;
@@ -33,6 +34,7 @@ void scheduler_round()
 		set_counter(&events->values[i]);
 	}
 
+	// [comment this out to stop reporting]
 	printf("\n");
 
 	// Adjust this to sleep for a smaller time slice

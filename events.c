@@ -16,7 +16,7 @@ struct event_type {
  * Performance Monitoring User Guide, pp. 24 for more details.
  */
 
-const static struct event_type armv8pmu_events[] = {
+const struct event_type armv8pmu_events[] = {
 	{"l1i_cache_refill",		0x0001},
 	{"l1d_cache_refill",		0x0003},
 	{"l1d_cache",			0x0004},
@@ -44,22 +44,50 @@ const static struct event_type armv8pmu_events[] = {
 	{"bus_cycles",			0x001d},
 };
 
-uint64_t armv8pmu_event_type_code(const char *name)
+const struct event_type armv7pmu_events[] = {
+	{"l1_instr_refill",		0x0001},
+	{"l1i_tlb_refill",		0x0002},
+	{"l1d_cache_refill",		0x0003},
+	{"l1d_cache",			0x0004},
+	{"ld_retired",			0x0006},
+	{"st_retired",			0x0007},
+	{"inst_retired",		0x0008},
+	{"br_immed_retired",		0x000d},
+	{"br_mis_pred",			0x0010},
+	{"cpu_cycles",			0x0011},
+	{"br_pred",			0x0012},
+	{"mem_access",			0x0013},
+	{"l1i_cache",			0x0014},
+	{"l1d_cache_wb",		0x0015},
+	{"l2d_cache",			0x0016},
+	{"l2d_cache_refill",		0x0017},
+	{"l2d_cache_wb",		0x0018},
+	{"bus_access",			0x0019},
+	{"bus_cycles",			0x001d},
+};
+
+#ifdef __aarch64__
+#define events armv8pmu_events
+#else
+#define events armv7pmu_events
+#endif
+
+uint64_t event_type_code(const char *name)
 {
-	for (size_t i = 0; i < NELEM(armv8pmu_events); ++i) {
-		if (strcmp(name, armv8pmu_events[i].event_name) == 0) {
-			return armv8pmu_events[i].event_code;
+	for (size_t i = 0; i < NELEM(events); ++i) {
+		if (strcmp(name, events[i].event_name) == 0) {
+			return events[i].event_code;
 		}
 	}
 
 	return -1;
 }
 
-const char *armv8pmu_event_type_name(uint64_t code)
+const char *event_type_name(uint64_t code)
 {
-	for (size_t i = 0; i < NELEM(armv8pmu_events); ++i) {
-		if (code == armv8pmu_events[i].event_code) {
-			return armv8pmu_events[i].event_name;
+	for (size_t i = 0; i < NELEM(events); ++i) {
+		if (code == events[i].event_code) {
+			return events[i].event_name;
 		}
 	}
 
