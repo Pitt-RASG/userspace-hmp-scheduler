@@ -1,121 +1,208 @@
 #define _GNU_SOURCE
 
 #include <pthread.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
-#include <linux/perf_event.h>
-#include <linux/hw_breakpoint.h>
-
-#include <asm/unistd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define die(msg) do { perror(msg); abort(); } while (0)
+#include "events.h"
+#include "perf.h"
 
-pthread_barrierattr_t attr;
-pthread_barrier_t *barrier;
-
-struct read_values {
-	uint64_t value;
+struct perf_info {
+	int fd;
 	uint64_t id;
+	uint64_t val;
+	uint64_t code;
+	const char *name;
 };
 
-struct read_format {
-	uint64_t nr;
-	struct read_values values[];
-};
+// Controlling perf counter fd
+static int main_perf_fd = -1;
 
-static int perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int group_fd, unsigned long flags)
+// Explicit counters
+static struct perf_info *counters;
+static size_t num_counters = 0;
+
+// Data for counters to be written into
+static struct read_format *events;
+static size_t events_size;
+
+// Barrier
+static pthread_barrierattr_t attr;
+static pthread_barrier_t *barrier;
+
+// Traced process
+static pid_t child;
+
+/**
+ * Configure the barrier used for event reporting, so that when performace
+ * counting is enabled, event counting can enabled before the traced process
+ * starts.
+ */
+static void setup_barrier()
 {
-	int ret = syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
-	if (ret < 0) die("perf_event_open");
-	return ret;
-}
-
-static void run_child(const char *pathname, char *const argv[], char *const envp[])
-{
-	pthread_barrier_wait(barrier);
-
-	// replace this with proper process spawn
-	// execve(pathname, argv, envp);
-
-	volatile size_t i = 0;
-
-	for (; i < 10000000000L; i++)
-		;
-
-	exit(0);
-}
-
-int main(int argc, char *argv[], char *envp[])
-{
-	struct perf_event_attr event_attr;
-	int fd1, fd2;
-	uint64_t id1, id2;
-	uint64_t val1, val2;
-	char buf[4096];
-	struct read_format *events = (struct read_format *) buf;
-	pid_t child;
-
 	barrier = mmap(NULL, sizeof(pthread_barrier_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	if (barrier == MAP_FAILED) die("mmap");
+	if (barrier == MAP_FAILED) {
+		die("mmap");
+	}
 
 	pthread_barrierattr_init(&attr);
 	pthread_barrierattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
 	pthread_barrier_init(barrier, &attr, 2);
+}
 
+/**
+ * Spawn the child process which will be run, wait on the barrier for events
+ * to become enabled, and then execve() the child.
+ */
+static void spawn_child(const char *pathname, char *const argv[], char *const envp[])
+{
 	child = fork();
-	if (child < 0) die("fork");
-	if (child == 0) run_child(NULL, argv, envp);
 
-	memset(&event_attr, 0, sizeof(struct perf_event_attr));
-	event_attr.type = PERF_TYPE_HARDWARE;
-	event_attr.size = sizeof(struct perf_event_attr);
-	event_attr.config = PERF_COUNT_HW_CPU_CYCLES;
-	event_attr.disabled = 1;
-	event_attr.exclude_kernel = 1;
-	event_attr.exclude_hv = 1;
-	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
-	fd1 = perf_event_open(&event_attr, child, -1, -1, PERF_FLAG_FD_CLOEXEC);
-	ioctl(fd1, PERF_EVENT_IOC_ID, &id1);
+	if (child < 0) {
+		die("fork");
+	}
 
-	memset(&event_attr, 0, sizeof(struct perf_event_attr));
+	if (child == 0) {
+		// Set child affinity to something known here
+
+		pthread_barrier_wait(barrier);
+
+		if (execve(pathname, argv, envp) != 0) {
+			die("execve");
+		}
+	}
+}
+
+/**
+ * Set up the main perf event fd, which will be used to control other
+ * perf reporting events.
+ */
+static void configure_main_perf_fd()
+{
+	struct perf_event_attr event_attr = {};
 	event_attr.type = PERF_TYPE_SOFTWARE;
 	event_attr.size = sizeof(struct perf_event_attr);
-	event_attr.config = PERF_COUNT_SW_PAGE_FAULTS;
+	event_attr.config = PERF_COUNT_SW_DUMMY;
+	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
+	main_perf_fd = perf_event_open(&event_attr, child, -1, -1, PERF_FLAG_FD_CLOEXEC);
+}
+
+/**
+ * Set up a raw event counter.
+ */
+static void configure_raw_counter(size_t num, uint64_t hardware_id)
+{
+	struct perf_event_attr event_attr = {};
+	event_attr.type = PERF_TYPE_RAW;
+	event_attr.size = sizeof(struct perf_event_attr);
+	event_attr.config = hardware_id;
 	event_attr.disabled = 1;
 	event_attr.exclude_kernel = 1;
 	event_attr.exclude_hv = 1;
 	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
-	fd2 = perf_event_open(&event_attr, child, -1, fd1, PERF_FLAG_FD_CLOEXEC);
-	ioctl(fd2, PERF_EVENT_IOC_ID, &id2);
 
-	ioctl(fd1, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-	ioctl(fd1, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+	// Install event counter
+	counters[num].fd = perf_event_open(&event_attr, child, -1, main_perf_fd, PERF_FLAG_FD_CLOEXEC);
+
+	// Track counter ID from kernel
+	ioctl(counters[num].fd, PERF_EVENT_IOC_ID, &counters[num].id);
+}
+
+/**
+ * Parse a string like "l1d_cache_refill,mem_access,br_pred"
+ */
+static void parse_event_list(char *event_list, size_t num)
+{
+	uint64_t code = -1;
+	char *token = strtok(event_list, ",");
+
+	if (token == NULL) {
+		// No more to read, now allocate array
+		num_counters = num;
+		counters = calloc(num_counters, sizeof(struct perf_info));
+		events_size = sizeof(struct read_format) + sizeof(struct read_values)*(num_counters + 1);
+		events = (struct read_format *) calloc(1, events_size);
+		return;
+	}
+
+	if ((code = armv8pmu_event_type_code(token)) == -1) {
+		fprintf(stderr, "Unknown event type %s\n", token);
+		exit(-1);
+	}
+
+	// Store event code on stack and recurse to parse next value
+	parse_event_list(NULL, num + 1);
+
+	// Write back code and name to counters
+	counters[num].code = code;
+	counters[num].name = armv8pmu_event_type_name(code);
+}
+
+/**
+ * Read performance counter data from the child.
+ */
+static void scheduler_round()
+{
+	if (read(main_perf_fd, events, events_size) < 0) {
+		die("read");
+	}
+
+	// Adjust this to feed the raw data into the predictor model.
+	//
+	// Change the thread affinity if the predictor thinks a
+	// migration is justified.
+	for (size_t i = 1; i < events->nr; i++) {
+		for (size_t j = 0; j < num_counters; j++) {
+			if (counters[j].id == events->values[i].id) {
+				counters[j].val = events->values[i].value;
+
+				printf("%s:%lu\t", counters[j].name, counters[j].val);
+
+				break;
+			}
+		}
+	}
+
+	printf("\n");
+}
+
+int main(int argc, char *argv[], char *envp[])
+{
+	if (argc < 3) {
+		fprintf(stderr, "Usage: %s <event1,event2...> <progname> [<args>...]\n", argv[0]);
+		exit(1);
+	}
+
+	// Set up the event list
+	parse_event_list(argv[1], 0);
+
+	// Set up the execution barrier and get the child ready
+	setup_barrier();
+	spawn_child(argv[2], argv + 2, envp);
+
+	// Configure the perf file descriptors
+	configure_main_perf_fd();
+	for (size_t i = 0; i < num_counters; i++) {
+		configure_raw_counter(i, counters[i].code);
+	}
+
+	// Reset and enable events and kick off execution
+	ioctl(main_perf_fd, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+	ioctl(main_perf_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 	pthread_barrier_wait(barrier);
 
 	while (waitpid(child, NULL, WNOHANG) == 0) {
-		read(fd1, buf, sizeof(buf));
-		for (size_t i = 0; i < events->nr; i++) {
-			if (events->values[i].id == id1) {
-				val1 = events->values[i].value;
-			} else if (events->values[i].id == id2) {
-				val2 = events->values[i].value;
-			}
-		}
+		scheduler_round();
 
-		printf("cpu:%lu pf:%lu\n", val1, val2);
+		// Adjust this to sleep for a smaller time slice
 		sleep(1);
 	}
 
-	ioctl(fd1, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
+	ioctl(main_perf_fd, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
 
 	return 0;
 }
