@@ -14,6 +14,8 @@
 
 // Controlling perf counter fd
 static int main_perf_fd = -1;
+static uint64_t main_perf_id;
+static uint64_t main_perf_val;
 
 // Barrier
 static pthread_barrierattr_t attr;
@@ -69,11 +71,17 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 static void configure_main_perf_fd()
 {
 	struct perf_event_attr event_attr = {};
-	event_attr.type = PERF_TYPE_SOFTWARE;
+	event_attr.type = PERF_TYPE_HARDWARE;
 	event_attr.size = sizeof(struct perf_event_attr);
-	event_attr.config = PERF_COUNT_SW_DUMMY;
+	event_attr.config = PERF_COUNT_HW_CPU_CYCLES;
+	event_attr.disabled = 1;
+	event_attr.exclude_kernel = 1;
+	event_attr.exclude_hv = 1;
 	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
+
 	main_perf_fd = perf_event_open(&event_attr, child, -1, -1, PERF_FLAG_FD_CLOEXEC);
+
+	ioctl(main_perf_fd, PERF_EVENT_IOC_ID, &main_perf_id);
 }
 
 /**
@@ -158,7 +166,14 @@ int main(int argc, char *argv[], char *envp[])
 			die("read");
 		}
 
-		scheduler_round();
+		// Extract CPU cycles
+		for (size_t i = 0; i < events->nr; i++) {
+			if (main_perf_id == events->values[i].id) {
+				main_perf_val = events->values[i].value;
+			}
+		}
+
+		scheduler_round(main_perf_val);
 	}
 
 	ioctl(main_perf_fd, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);

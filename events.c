@@ -44,8 +44,12 @@ const struct event_type armv8pmu_events[] = {
 	{"bus_cycles",			0x001d},
 };
 
+/**
+ * See Cortex-A7 MPCore r0p3 Technical Reference Manual,
+ * ss. 11.5 "Events" for more details.
+ */
 const struct event_type armv7pmu_events[] = {
-	{"l1_instr_refill",		0x0001},
+	{"l1i_cache_refill",		0x0001},
 	{"l1i_tlb_refill",		0x0002},
 	{"l1d_cache_refill",		0x0003},
 	{"l1d_cache",			0x0004},

@@ -24,18 +24,21 @@ static void set_counter(struct read_values *restrict v)
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round()
+void scheduler_round(uint64_t cycles)
 {
-	// Adjust this to feed the raw data into the predictor model.
-	//
-	// Change the thread affinity if the predictor thinks a
-	// migration is justified.
+	printf("cycles:%lu\t", cycles);
+
 	for (size_t i = 1; i < events->nr; i++) {
 		set_counter(&events->values[i]);
 	}
 
 	// [comment this out to stop reporting]
 	printf("\n");
+
+	// Feed the raw data into the predictor model.
+	//
+	// Change the thread affinity if the predictor thinks a
+	// migration is justified.
 
 	// Adjust this to sleep for a smaller time slice
 	usleep(200000);

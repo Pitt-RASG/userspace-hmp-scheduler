@@ -6,7 +6,7 @@
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round();
+void scheduler_round(uint64_t cycles);
 
 struct perf_info {
 	int fd;
