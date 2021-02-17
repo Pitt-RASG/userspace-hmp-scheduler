@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +12,15 @@
 
 #include <asm/unistd.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
 #define die(msg) do { perror(msg); abort(); } while (0)
+
+pthread_barrierattr_t attr;
+pthread_barrier_t *barrier;
 
 struct read_values {
 	uint64_t value;
@@ -36,6 +41,8 @@ static int perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int
 
 static void run_child(const char *pathname, char *const argv[], char *const envp[])
 {
+	pthread_barrier_wait(barrier);
+
 	// replace this with proper process spawn
 	// execve(pathname, argv, envp);
 
@@ -56,6 +63,13 @@ int main(int argc, char *argv[], char *envp[])
 	char buf[4096];
 	struct read_format *events = (struct read_format *) buf;
 	pid_t child;
+
+	barrier = mmap(NULL, sizeof(pthread_barrier_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (barrier == MAP_FAILED) die("mmap");
+
+	pthread_barrierattr_init(&attr);
+	pthread_barrierattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	pthread_barrier_init(barrier, &attr, 2);
 
 	child = fork();
 	if (child < 0) die("fork");
@@ -85,6 +99,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	ioctl(fd1, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
 	ioctl(fd1, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+	pthread_barrier_wait(barrier);
 
 	while (waitpid(child, NULL, WNOHANG) == 0) {
 		read(fd1, buf, sizeof(buf));
