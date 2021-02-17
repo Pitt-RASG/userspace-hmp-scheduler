@@ -1,5 +1,7 @@
 # Userspace HMP scheduler
 
+First run `echo -1 > /proc/sys/kernel/perf_event_paranoid` on recent kernels to undo "security" brain damage.
+
 ```
 ~/userspace-hmp-scheduler $ ./report cpu_cycles,inst_retired benchmarks/cpu
 cpu_cycles:0	inst_retired:0	
