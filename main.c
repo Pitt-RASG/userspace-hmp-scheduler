@@ -10,25 +10,10 @@
 
 #include "events.h"
 #include "perf.h"
-
-struct perf_info {
-	int fd;
-	uint64_t id;
-	uint64_t val;
-	uint64_t code;
-	const char *name;
-};
+#include "scheduler.h"
 
 // Controlling perf counter fd
 static int main_perf_fd = -1;
-
-// Explicit counters
-static struct perf_info *counters;
-static size_t num_counters = 0;
-
-// Data for counters to be written into
-static struct read_format *events;
-static size_t events_size;
 
 // Barrier
 static pthread_barrierattr_t attr;
@@ -142,34 +127,6 @@ static void parse_event_list(char *event_list, size_t num)
 	counters[num].name = armv8pmu_event_type_name(code);
 }
 
-/**
- * Read performance counter data from the child.
- */
-static void scheduler_round()
-{
-	if (read(main_perf_fd, events, events_size) < 0) {
-		die("read");
-	}
-
-	// Adjust this to feed the raw data into the predictor model.
-	//
-	// Change the thread affinity if the predictor thinks a
-	// migration is justified.
-	for (size_t i = 1; i < events->nr; i++) {
-		for (size_t j = 0; j < num_counters; j++) {
-			if (counters[j].id == events->values[i].id) {
-				counters[j].val = events->values[i].value;
-
-				printf("%s:%lu\t", counters[j].name, counters[j].val);
-
-				break;
-			}
-		}
-	}
-
-	printf("\n");
-}
-
 int main(int argc, char *argv[], char *envp[])
 {
 	if (argc < 3) {
@@ -186,20 +143,22 @@ int main(int argc, char *argv[], char *envp[])
 
 	// Configure the perf file descriptors
 	configure_main_perf_fd();
+
 	for (size_t i = 0; i < num_counters; i++) {
 		configure_raw_counter(i, counters[i].code);
 	}
 
-	// Reset and enable events and kick off execution
+	// Reset and enable events, kick off execution
 	ioctl(main_perf_fd, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
 	ioctl(main_perf_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 	pthread_barrier_wait(barrier);
 
 	while (waitpid(child, NULL, WNOHANG) == 0) {
-		scheduler_round();
+		if (read(main_perf_fd, events, events_size) < 0) {
+			die("read");
+		}
 
-		// Adjust this to sleep for a smaller time slice
-		sleep(1);
+		scheduler_round();
 	}
 
 	ioctl(main_perf_fd, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);

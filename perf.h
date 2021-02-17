@@ -30,7 +30,7 @@ struct read_format {
  * Syscall wrapper for unimplemented library function perf_event_open.
  * See manual for perf_event_open(2).
  */
-static int perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int group_fd, unsigned long flags)
+static inline int perf_event_open(struct perf_event_attr *attr, pid_t pid, int cpu, int group_fd, unsigned long flags)
 {
 	int ret = syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
 	if (ret < 0) die("perf_event_open");

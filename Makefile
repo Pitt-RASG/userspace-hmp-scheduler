@@ -1,7 +1,7 @@
 CFLAGS	:= -Wall -g3 -O0
 LDFLAGS	:= -pthread
 TGT	:= report
-OBJS	:= events.o report.o
+OBJS	:= events.o main.o scheduler.o
 
 .PHONY: all clean
 
