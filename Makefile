@@ -1,5 +1,5 @@
 CFLAGS	:= -Wall -g3 -O0
-LDFLAGS	:= -pthread
+LDFLAGS	:=
 TGT	:= report
 OBJS	:= report.o
 
