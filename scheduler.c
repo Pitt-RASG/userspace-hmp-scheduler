@@ -39,7 +39,4 @@ void scheduler_round(uint64_t cycles)
 	//
 	// Change the thread affinity if the predictor thinks a
 	// migration is justified.
-
-	// Adjust this to sleep for a smaller time slice
-	usleep(200000);
 }

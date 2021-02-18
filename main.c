@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include <pthread.h>
+#include <signal.h>
 #include <string.h>
 
 #include <sys/ioctl.h>
@@ -23,6 +24,8 @@ static pthread_barrier_t *barrier;
 
 // Traced process
 static pid_t child;
+static useconds_t sleep_duration;
+static int core;
 
 /**
  * Configure the barrier used for event reporting, so that when performace
@@ -54,7 +57,10 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 	}
 
 	if (child == 0) {
-		// Set child affinity to something known here
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(core, &cpuset);
+		sched_setaffinity(0, sizeof(cpuset), &cpuset);
 
 		pthread_barrier_wait(barrier);
 
@@ -135,19 +141,28 @@ static void parse_event_list(char *event_list, size_t num)
 	counters[num].name = event_type_name(code);
 }
 
+static void sigchld_handler(int signal)
+{
+	exit(0);
+}
+
 int main(int argc, char *argv[], char *envp[])
 {
-	if (argc < 3) {
-		fprintf(stderr, "Usage: %s <event1,event2...> <progname> [<args>...]\n", argv[0]);
+	if (argc < 5) {
+		fprintf(stderr, "Usage: %s <event1,event2...> <core> <sleepdur> <progname> [<args>...]\n", argv[0]);
 		exit(1);
 	}
 
 	// Set up the event list
 	parse_event_list(argv[1], 0);
 
+	core = atoi(argv[2]);
+	sleep_duration = atoi(argv[3]);
+
 	// Set up the execution barrier and get the child ready
 	setup_barrier();
-	spawn_child(argv[2], argv + 2, envp);
+	spawn_child(argv[4], argv + 4, envp);
+	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
 	configure_main_perf_fd();
@@ -174,9 +189,9 @@ int main(int argc, char *argv[], char *envp[])
 		}
 
 		scheduler_round(main_perf_val);
-	}
 
-	ioctl(main_perf_fd, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
+		usleep(sleep_duration);
+	}
 
 	return 0;
 }
