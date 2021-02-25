@@ -1,13 +1,16 @@
 #define _GNU_SOURCE
 
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <string.h>
+#include <time.h>
 
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include "events.h"
@@ -23,6 +26,62 @@ static pid_t child;
 static useconds_t sleep_duration;
 
 static char tracked_events[] = "cpu_cycles,inst_retired,l2d_cache,l2d_cache_refill,br_mis_pred";
+
+// Energy monitoring 
+static int voltage_dev_fd = -1;
+static int current_dev_fd = -1;
+
+static const char *voltage_dev = "/sys/class/power_supply/bms/voltage_now";
+static const char *current_dev = "/sys/class/power_supply/bms/current_now";
+
+static uint64_t voltage_sum = 0;
+static uint64_t current_sum = 0;
+static uint64_t num_samples = 0;
+
+static struct timespec start_time;
+static struct timespec end_time;
+
+static void setup_energy_monitor()
+{
+	voltage_dev_fd = open(voltage_dev, O_RDONLY);
+	if (voltage_dev_fd < 0) die("open voltage");
+
+	current_dev_fd = open(current_dev, O_RDONLY);
+	if (current_dev_fd < 0) die("open current");
+}
+
+static void read_power()
+{
+	char buf[22];
+
+	lseek(voltage_dev_fd, 0, SEEK_SET);
+	lseek(current_dev_fd, 0, SEEK_SET);
+
+	if (read(voltage_dev_fd, buf, sizeof(buf)) < 0) die("read voltage");
+	voltage_sum += atol(buf);
+
+	if (read(current_dev_fd, buf, sizeof(buf)) < 0) die("read current");
+	current_sum += atol(buf);
+
+	num_samples++;
+}
+
+static void report_energy()
+{
+	// voltage is reported in microvolts, current in microamps
+
+	// milliwatts
+	uint64_t avg_power = (voltage_sum * current_sum) / num_samples / 1000000000;
+
+	// milliseconds
+	uint64_t elapsed_time = ((end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec)) / 1000000;
+
+	// millijoules
+	uint64_t energy = avg_power * elapsed_time / 1000000;
+
+	printf("%ld mJ\n", energy);
+	printf("%ld ms\n", elapsed_time);
+}
 
 /**
  * Configure the barrier used for event reporting, so that when performace
@@ -114,6 +173,9 @@ static void parse_event_list(char *event_list, size_t num)
 
 static void sigchld_handler(int signal)
 {
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+	report_energy();
+
 	exit(0);
 }
 
@@ -143,10 +205,15 @@ int main(int argc, char *argv[], char *envp[])
 		configure_raw_counter(i, counters[i].code);
 	}
 
+	setup_energy_monitor();
+
 	// Kick off execution
 	pthread_barrier_wait(barrier);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
 
-	while (waitpid(child, NULL, WNOHANG) == 0) {
+	while (1) {
+		read_power();
+
 		for (size_t i = 0; i < num_counters; i++) {
 			if (read(counters[i].fd, &events[i], sizeof(struct read_format)) < 0) {
 				die("read");
