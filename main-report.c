@@ -11,15 +11,15 @@
 
 #define die(msg) do { perror(msg); exit(-1); } while (0);
 
-// Energy monitoring 
+// Energy monitoring
 static int voltage_dev_fd = -1;
 static int current_dev_fd = -1;
 
 static const char *voltage_dev = "/sys/class/power_supply/bms/voltage_now";
 static const char *current_dev = "/sys/class/power_supply/bms/current_now";
 
-static uint64_t voltage_sum = 0;
-static uint64_t current_sum = 0;
+static int64_t voltage_sum = 0;
+static int64_t current_sum = 0;
 static uint64_t num_samples = 0;
 
 static struct timespec start_time;
@@ -42,26 +42,26 @@ static void read_power()
 	lseek(current_dev_fd, 0, SEEK_SET);
 
 	if (read(voltage_dev_fd, buf, sizeof(buf)) < 0) die("read voltage");
-	voltage_sum += atol(buf);
+	voltage_sum += atol(buf) / 1000;
 
 	if (read(current_dev_fd, buf, sizeof(buf)) < 0) die("read current");
-	current_sum += atol(buf);
+	current_sum += atol(buf) / 1000;
 
 	num_samples++;
 }
 
 static void report_energy()
 {
-	// voltage is reported in microvolts, current in microamps
+	// voltage is reported in millivolts, current in milliamps
 
 	// milliwatts
-	uint64_t avg_power = (voltage_sum * current_sum) / num_samples / 1000000000;
+	int64_t avg_power = (voltage_sum/num_samples) * (current_sum/num_samples) / 1000;
 
 	// milliseconds
-	uint64_t elapsed_time = ((end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec)) / 1000000;
+	int64_t elapsed_time = ((end_time.tv_sec - start_time.tv_sec)*1000000000 + (end_time.tv_nsec - start_time.tv_nsec)) / 1000000;
 
 	// millijoules
-	uint64_t energy = avg_power * elapsed_time / 1000000;
+	int64_t energy = avg_power * elapsed_time / 1000;
 
 	printf("%ld mJ\n", energy);
 	printf("%ld ms\n", elapsed_time);
