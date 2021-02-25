@@ -3,10 +3,22 @@
 
 #include "perf.h"
 
+void spawn_predictor(const char *command);
+
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(uint64_t cycles);
+void scheduler_round(pid_t pid);
+
+/**
+ * Transfer to little core.
+ */
+void transfer_to_little(pid_t pid);
+
+/**
+ * Transfer to big core.
+ */
+void transfer_to_big(pid_t pid);
 
 struct perf_info {
 	int fd;

@@ -6,6 +6,7 @@
 
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -16,7 +17,6 @@
 // Controlling perf counter fd
 static int main_perf_fd = -1;
 static uint64_t main_perf_id;
-static uint64_t main_perf_val;
 
 // Barrier
 static pthread_barrierattr_t attr;
@@ -25,7 +25,8 @@ static pthread_barrier_t *barrier;
 // Traced process
 static pid_t child;
 static useconds_t sleep_duration;
-static int core;
+
+static char tracked_events[] = "inst_retired,l2d_cache,l2d_cache_refill,br_mis_pred";
 
 /**
  * Configure the barrier used for event reporting, so that when performace
@@ -57,10 +58,8 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 	}
 
 	if (child == 0) {
-		cpu_set_t cpuset;
-		CPU_ZERO(&cpuset);
-		CPU_SET(core, &cpuset);
-		sched_setaffinity(0, sizeof(cpuset), &cpuset);
+		transfer_to_little(getpid());
+		prctl(PR_SET_PDEATHSIG, SIGKILL);
 
 		pthread_barrier_wait(barrier);
 
@@ -148,20 +147,23 @@ static void sigchld_handler(int signal)
 
 int main(int argc, char *argv[], char *envp[])
 {
-	if (argc < 5) {
-		fprintf(stderr, "Usage: %s <event1,event2...> <core> <sleepdur> <progname> [<args>...]\n", argv[0]);
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <progname> [<args>...]\n", argv[0]);
 		exit(1);
 	}
 
-	// Set up the event list
-	parse_event_list(argv[1], 0);
+	// Spawn predictor program
+	spawn_predictor("python3 ./predictor.py");
 
-	core = atoi(argv[2]);
-	sleep_duration = atoi(argv[3]);
+	// Set up the event list
+	parse_event_list(tracked_events, 0);
+
+	// 200 ms
+	sleep_duration = 200000;
 
 	// Set up the execution barrier and get the child ready
 	setup_barrier();
-	spawn_child(argv[4], argv + 4, envp);
+	spawn_child(argv[1], argv + 1, envp);
 	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
@@ -181,14 +183,7 @@ int main(int argc, char *argv[], char *envp[])
 			die("read");
 		}
 
-		// Extract CPU cycles
-		for (size_t i = 0; i < events->nr; i++) {
-			if (main_perf_id == events->values[i].id) {
-				main_perf_val = events->values[i].value;
-			}
-		}
-
-		scheduler_round(main_perf_val);
+		scheduler_round(child);
 
 		usleep(sleep_duration);
 	}
