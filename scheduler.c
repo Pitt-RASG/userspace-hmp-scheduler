@@ -167,7 +167,7 @@ void scheduler_round(pid_t pid)
 	// migration is justified.
 
 	// match trained model format
-	send_to_predictor("%d,%d,%d,%d,%d,%d", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
+	send_to_predictor("%ld,%ld,%ld,%ld,%ld,%d", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
 	recv_from_predictor("%d", &predicted_phase);
 
 	if (predicted_phase >= 5 && !is_little) {
