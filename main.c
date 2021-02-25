@@ -54,7 +54,6 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 	}
 
 	if (child == 0) {
-		transfer_to_little(getpid());
 		prctl(PR_SET_PDEATHSIG, SIGKILL);
 
 		pthread_barrier_wait(barrier);
@@ -63,6 +62,8 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 			die("execve");
 		}
 	}
+
+	transfer_to_little(child);
 }
 
 /**
