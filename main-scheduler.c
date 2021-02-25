@@ -36,7 +36,7 @@ static const char *current_dev = "/sys/class/power_supply/bms/current_now";
 
 static int64_t voltage_sum = 0;
 static int64_t current_sum = 0;
-static uint64_t num_samples = 0;
+static int64_t num_samples = 0;
 
 static struct timespec start_time;
 static struct timespec end_time;
