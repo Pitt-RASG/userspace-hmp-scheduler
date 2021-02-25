@@ -1,19 +1,25 @@
 CFLAGS	:= -Wall -g3 -O0
 LDFLAGS	:= -pthread
-TGT	:= report
-OBJS	:= events.o main.o scheduler.o
+SCHED	:= schedule
+REPT	:= report
+SOBJS	:= events.o main-scheduler.o scheduler.o
+ROBJS	:= main-report.o
 
 .PHONY: all clean
 
-all: $(TGT)
+all: $(SCHED) $(REPT)
 
 clean:
-	rm -rf $(OBJS) $(OBJS:.o=.d) $(TGT)
+	rm -rf $(ROBJS) $(SOBJS) $(ROBJS:.o=.d) $(SOBJS:.o=.d) $(REPT) $(SCHED)
 
--include $(OBJS:.o=.d)
+-include $(ROBJS:.o=.d)
+-include $(SOBJS:.o=.d)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -MMD -o $@
 
-$(TGT): $(OBJS)
+$(REPT): $(ROBJS)
+	$(CC) $(LDFLAGS) $^ -o $@
+
+$(SCHED): $(SOBJS)
 	$(CC) $(LDFLAGS) $^ -o $@
