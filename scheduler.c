@@ -148,19 +148,6 @@ void scheduler_round(pid_t pid)
 	l2d_cache_refill = events[3].value;
 	br_mis_pred      = events[4].value;
 
-	/*
-	for (size_t i = 0; i < num_counters; i++) {
-		printf("%ld 0x%lx\n", counters[i].id, counters[i].code);
-	}
-
-	printf("---\n");
-
-	for (size_t i = 1; i < events->nr; i++) {
-		printf("%ld\n", events->values[i].id);
-	}
-
-	die("done");*/
-
 	// Feed the raw data into the predictor model.
 	//
 	// Change the thread affinity if the predictor thinks a
