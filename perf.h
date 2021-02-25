@@ -13,17 +13,11 @@
 #define die(msg) do { perror(msg); abort(); } while (0)
 
 /**
- * Struct definitions for unimplemented library function perf_event_open.
+ * Struct definition for unimplemented library function perf_event_open.
  * See manual for perf_event_open(2).
  */
-struct read_values {
-	uint64_t value;
-	uint64_t id;
-};
-
 struct read_format {
-	uint64_t nr;
-	struct read_values values[];
+	uint64_t value;
 };
 
 /**

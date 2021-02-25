@@ -142,11 +142,11 @@ void scheduler_round(pid_t pid)
 	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
 	int predicted_phase;
 
-	cpu_cycles       = events->values[0].value;
-	inst_retired     = events->values[1].value;
-	l2d_cache        = events->values[2].value;
-	l2d_cache_refill = events->values[3].value;
-	br_mis_pred      = events->values[4].value;
+	cpu_cycles       = events[0].value;
+	inst_retired     = events[1].value;
+	l2d_cache        = events[2].value;
+	l2d_cache_refill = events[3].value;
+	br_mis_pred      = events[4].value;
 
 	/*
 	for (size_t i = 0; i < num_counters; i++) {

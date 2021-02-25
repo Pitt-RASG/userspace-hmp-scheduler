@@ -14,10 +14,6 @@
 #include "perf.h"
 #include "scheduler.h"
 
-// Controlling perf counter fd
-static int main_perf_fd = -1;
-static uint64_t main_perf_id;
-
 // Barrier
 static pthread_barrierattr_t attr;
 static pthread_barrier_t *barrier;
@@ -26,7 +22,7 @@ static pthread_barrier_t *barrier;
 static pid_t child;
 static useconds_t sleep_duration;
 
-static char tracked_events[] = "inst_retired,l2d_cache,l2d_cache_refill,br_mis_pred";
+static char tracked_events[] = "cpu_cycles,inst_retired,l2d_cache,l2d_cache_refill,br_mis_pred";
 
 /**
  * Configure the barrier used for event reporting, so that when performace
@@ -70,26 +66,6 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 }
 
 /**
- * Set up the main perf event fd, which will be used to control other
- * perf reporting events.
- */
-static void configure_main_perf_fd()
-{
-	struct perf_event_attr event_attr = {};
-	event_attr.type = PERF_TYPE_HARDWARE;
-	event_attr.size = sizeof(struct perf_event_attr);
-	event_attr.config = PERF_COUNT_HW_CPU_CYCLES;
-	event_attr.disabled = 1;
-	event_attr.exclude_kernel = 1;
-	event_attr.exclude_hv = 1;
-	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
-
-	main_perf_fd = perf_event_open(&event_attr, child, -1, -1, PERF_FLAG_FD_CLOEXEC);
-
-	ioctl(main_perf_fd, PERF_EVENT_IOC_ID, &main_perf_id);
-}
-
-/**
  * Set up a raw event counter.
  */
 static void configure_raw_counter(size_t num, uint64_t hardware_id)
@@ -98,16 +74,11 @@ static void configure_raw_counter(size_t num, uint64_t hardware_id)
 	event_attr.type = PERF_TYPE_RAW;
 	event_attr.size = sizeof(struct perf_event_attr);
 	event_attr.config = hardware_id;
-	event_attr.disabled = 1;
 	event_attr.exclude_kernel = 1;
 	event_attr.exclude_hv = 1;
-	event_attr.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
 
 	// Install event counter
-	counters[num].fd = perf_event_open(&event_attr, child, -1, main_perf_fd, PERF_FLAG_FD_CLOEXEC);
-
-	// Track counter ID from kernel
-	ioctl(counters[num].fd, PERF_EVENT_IOC_ID, &counters[num].id);
+	counters[num].fd = perf_event_open(&event_attr, child, -1, -1, PERF_FLAG_FD_CLOEXEC);
 }
 
 /**
@@ -122,7 +93,7 @@ static void parse_event_list(char *event_list, size_t num)
 		// No more to read, now allocate array
 		num_counters = num;
 		counters = calloc(num_counters, sizeof(struct perf_info));
-		events_size = sizeof(struct read_format) + sizeof(struct read_values)*(num_counters + 1);
+		events_size = sizeof(struct read_format)*num_counters;
 		events = (struct read_format *) calloc(1, events_size);
 		return;
 	}
@@ -167,20 +138,18 @@ int main(int argc, char *argv[], char *envp[])
 	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
-	configure_main_perf_fd();
-
 	for (size_t i = 0; i < num_counters; i++) {
 		configure_raw_counter(i, counters[i].code);
 	}
 
-	// Reset and enable events, kick off execution
-	ioctl(main_perf_fd, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-	ioctl(main_perf_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+	// Kick off execution
 	pthread_barrier_wait(barrier);
 
 	while (waitpid(child, NULL, WNOHANG) == 0) {
-		if (read(main_perf_fd, events, events_size) < 0) {
-			die("read");
+		for (size_t i = 0; i < num_counters; i++) {
+			if (read(counters[i].fd, &events[i], sizeof(struct read_format)) < 0) {
+				die("read");
+			}
 		}
 
 		scheduler_round(child);
