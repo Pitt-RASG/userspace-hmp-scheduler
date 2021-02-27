@@ -59,7 +59,7 @@ static void read_proc_stat()
 		"%*u %*u %*u %*u"	// startcode, endcode, startstack, kstkesp
 		"%*u %*u %*u %*u"	// kstkeip, signal, blocked, sigignore
 		"%*u %*u %*u %*u"	// sigcatch, wchan, nswap, cnswap
-		"%*d %d",		// exit_signal, processor.
+		"%*d %*d %d",		// exit_signal, processor.
 		&proc);
 
 	core_num += (proc >= 6);
