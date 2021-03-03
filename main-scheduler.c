@@ -226,16 +226,8 @@ static void sigchld_handler(int signal)
 	exit(0);
 }
 
-int main(int argc, char *argv[], char *envp[])
+int scheduler_main(char *argv[], predict_phase cb)
 {
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s <progname> [<args>...]\n", argv[0]);
-		exit(1);
-	}
-
-	// Spawn predictor program
-	spawn_predictor("python3 ./predictor.py");
-
 	// Set up the event list
 	parse_event_list(tracked_events, 0);
 
@@ -244,7 +236,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	// Set up the execution barrier and get the child ready
 	setup_barrier();
-	spawn_child(argv[1], argv + 1, envp);
+	spawn_child(argv[0], argv, environ);
 	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
@@ -269,7 +261,7 @@ int main(int argc, char *argv[], char *envp[])
 			}
 		}
 
-		scheduler_round(child);
+		scheduler_round(child, cb);
 
 		usleep(sleep_duration);
 	}

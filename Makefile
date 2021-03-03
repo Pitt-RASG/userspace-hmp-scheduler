@@ -1,6 +1,6 @@
-CFLAGS	:= -Wall -g3 -O0
+CFLAGS	:= -Wall -g3 -O0 -fPIC
 LDFLAGS	:= -pthread
-SCHED	:= schedule
+SCHED	:= libschedule.so
 REPT	:= report
 SOBJS	:= events.o main-scheduler.o scheduler.o
 ROBJS	:= main-report.o
@@ -22,4 +22,4 @@ $(REPT): $(ROBJS)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 $(SCHED): $(SOBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) -shared $^ -o $@

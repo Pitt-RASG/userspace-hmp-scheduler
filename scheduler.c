@@ -17,84 +17,7 @@ static int little_cores[] = { 0, 1, 2, 3, 4, 5 };
 static int big_cores[]    = { 6, 7 };
 static int is_little      = 0;
 
-static pid_t predictor_pid;
-static int predictor_input_pipe;
-static int predictor_output_pipe;
-
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-
-static void send_to_predictor(const char* fmt, ...)
-{
-	char buffer[512];
-
-	va_list va;
-	va_start(va, fmt);
-	int count = vsnprintf(buffer, sizeof(buffer) - 1, fmt, va);
-	va_end(va);
-
-	if (count < 0) {
-		die("vnsprintf");
-	}
-
-	buffer[count++] = '\n';
-	buffer[count] = '\0';
-
-	int written = write(predictor_input_pipe, buffer, count);
-	if (written < 0) die("scheduler write");
-	else if (written != count) die("scheduler write");
-
-}
-
-static void recv_from_predictor(const char* fmt, ...)
-{
-	int count = 0;
-	char buffer[512];
-
-	while (count == 0 || buffer[count-1] != '\n') {
-		int result = read(predictor_output_pipe, buffer, sizeof(buffer) - count);
-		if (result <= 0) die("scheduler read");
-
-		count += result;
-		assert(count < (int) sizeof(buffer) - 1);
-	}
-
-	va_list va;
-	va_start(va, fmt);
-	vsscanf(buffer, fmt, va);
-	va_end(va);
-}
-
-// TODO: use Python FFI
-void spawn_predictor(const char *command)
-{
-	int inpipefd[2];
-	int outpipefd[2];
-
-	if (pipe(inpipefd) < 0) die("pipe");
-	if (pipe(outpipefd) < 0) die("pipe");
-
-	predictor_pid = fork();
-	if (predictor_pid < 0) die("fork");
-
-	if (predictor_pid == 0) {
-		dup2(outpipefd[0], STDIN_FILENO);
-		dup2(inpipefd[1], STDOUT_FILENO);
-		close(outpipefd[1]);
-		close(inpipefd[0]);
-		
-		// receive SIGKILL once the parent process dies
-		prctl(PR_SET_PDEATHSIG, SIGKILL);
-
-		// execute predictor script
-		execl("/bin/sh", "sh", "-c", command, NULL);
-		die("execl");
-	} else {
-		close(outpipefd[0]);
-		close(inpipefd[1]);
-		predictor_input_pipe = outpipefd[1];
-		predictor_output_pipe = inpipefd[0];
-	}
-}
 
 /**
  * Transfer to little core.
@@ -137,7 +60,7 @@ void transfer_to_big(pid_t pid)
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid)
+void scheduler_round(pid_t pid, predict_phase predictor)
 {
 	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
 	int predicted_phase;
@@ -154,8 +77,7 @@ void scheduler_round(pid_t pid)
 	// migration is justified.
 
 	// match trained model format
-	send_to_predictor("%ld,%ld,%ld,%ld,%ld,%d", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
-	recv_from_predictor("%d", &predicted_phase);
+	predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
 
 	if (predicted_phase >= 5 && !is_little) {
 		puts("little transfer");

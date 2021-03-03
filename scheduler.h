@@ -3,12 +3,15 @@
 
 #include "perf.h"
 
-void spawn_predictor(const char *command);
+/**
+ * Scheduling callback.
+ */
+typedef int (*predict_phase)(long, long, long, long, long, int);
 
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid);
+void scheduler_round(pid_t pid, predict_phase cb);
 
 /**
  * Transfer to little core.
