@@ -16,7 +16,7 @@ def main():
     scaler = load(open("phases-scaler.pkl", "rb"))
 
     @ffi.callback("int(long,long,long,long,long,int)")
-    def run_prediction(pmc1, pmc2, pmc3, pmc4, pmc5, cluster):
+    def run_prediction(p1, p2, p3, p4, p5, cluster):
         pmcs = [[p3, p5, p1, p4, p2, cluster]] # order is based on how the ML was trained
         scaled_pmcs = scaler.transform(pmcs)
         return model.predict(scaled_pmcs)[0]
