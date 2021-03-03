@@ -22,7 +22,7 @@ def main():
         return model.predict(scaled_pmcs)[0]
 
     # setup subprocess argv
-    argv = [ffi.new("char[]", x) for arg in sys.argv[2:]]
+    argv = [ffi.new("char[]", arg.encode("ascii")) for arg in sys.argv[1:]]
     argv.append(ffi.NULL)
 
     # run it
