@@ -21,7 +21,12 @@ def main():
         scaled_pmcs = scaler.transform(pmcs)
         return model.predict(scaled_pmcs)[0]
 
-    lib.scheduler_main([ffi.new("char[]", x) for arg in sys.argv[2:]], run_prediction)
+    # setup subprocess argv
+    argv = [ffi.new("char[]", x) for arg in sys.argv[2:]]
+    argv.append(ffi.NULL)
+
+    # run it
+    lib.scheduler_main(argv, run_prediction)
 
 if __name__ == "__main__":
     main()
