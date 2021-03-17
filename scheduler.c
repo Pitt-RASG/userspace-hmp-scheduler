@@ -83,14 +83,19 @@ void scheduler_round(pid_t pid, predict_phase predictor)
 	// Change the thread affinity if the predictor thinks a
 	// migration is justified.
 
+        if (inst_retired <= 0)
+                return;
+
 	// match trained model format
 	// predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
 	printf("%lu %lu %lu %lu %lu\n", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred);
 
-	if (predicted_phase >= 5 && !is_little) {
+        predicted_phase = (l2d_cache_refill*1000/inst_retired) > 1;
+
+	if (predicted_phase >= 1 && !is_little) {
 		puts("little transfer");
 		transfer_to_little(pid);
-	} else if (predicted_phase < 5 && is_little) {
+	} else if (predicted_phase < 1 && is_little) {
 		puts("big transfer");
 		transfer_to_big(pid);
 	}
