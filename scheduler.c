@@ -62,14 +62,21 @@ void transfer_to_big(pid_t pid)
  */
 void scheduler_round(pid_t pid, predict_phase predictor)
 {
-	static uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
+	static uint64_t g_cpu_cycles, g_inst_retired, g_l2d_cache, g_l2d_cache_refill, g_br_mis_pred;
+	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
 	int predicted_phase = 0;
 
-	cpu_cycles       = events[0].value - cpu_cycles;
-	inst_retired     = events[1].value - inst_retired;
-	l2d_cache        = events[2].value - l2d_cache;
-	l2d_cache_refill = events[3].value - l2d_cache_refill;
-	br_mis_pred      = events[4].value - br_mis_pred;
+	cpu_cycles       = events[0].value - g_cpu_cycles;
+	inst_retired     = events[1].value - g_inst_retired;
+	l2d_cache        = events[2].value - g_l2d_cache;
+	l2d_cache_refill = events[3].value - g_l2d_cache_refill;
+	br_mis_pred      = events[4].value - g_br_mis_pred;
+
+	g_cpu_cycles       = events[0].value;
+	g_inst_retired     = events[1].value;
+	g_l2d_cache        = events[2].value;
+	g_l2d_cache_refill = events[3].value;
+	g_br_mis_pred      = events[4].value;
 
 	// Feed the raw data into the predictor model.
 	//
