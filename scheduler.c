@@ -62,14 +62,14 @@ void transfer_to_big(pid_t pid)
  */
 void scheduler_round(pid_t pid, predict_phase predictor)
 {
-	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
-	int predicted_phase;
+	static uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
+	int predicted_phase = 0;
 
-	cpu_cycles       = events[0].value;
-	inst_retired     = events[1].value;
-	l2d_cache        = events[2].value;
-	l2d_cache_refill = events[3].value;
-	br_mis_pred      = events[4].value;
+	cpu_cycles       = events[0].value - cpu_cycles;
+	inst_retired     = events[1].value - inst_retired;
+	l2d_cache        = events[2].value - l2d_cache;
+	l2d_cache_refill = events[3].value - l2d_cache_refill;
+	br_mis_pred      = events[4].value - br_mis_pred;
 
 	// Feed the raw data into the predictor model.
 	//
@@ -77,7 +77,8 @@ void scheduler_round(pid_t pid, predict_phase predictor)
 	// migration is justified.
 
 	// match trained model format
-	predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
+	// predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
+	printf("%lu %lu %lu %lu %lu\n", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred);
 
 	if (predicted_phase >= 5 && !is_little) {
 		puts("little transfer");
