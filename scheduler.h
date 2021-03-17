@@ -11,7 +11,7 @@ typedef int (*predict_phase)(long, long, long, long, long, int);
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid, predict_phase cb);
+void scheduler_round(pid_t pid, int64_t power);
 
 /**
  * Transfer to little core.

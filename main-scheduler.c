@@ -104,6 +104,11 @@ static void read_power()
 	num_samples++;
 }
 
+static int64_t current_power()
+{
+	return (voltage_sum/num_samples)*(current_sum/num_samples) / 1000;
+}
+
 static void report_energy()
 {
 	// voltage is reported in millivolts, current in milliamps
@@ -261,7 +266,7 @@ int scheduler_main(char *argv[], predict_phase cb)
 			}
 		}
 
-		scheduler_round(child, cb);
+		scheduler_round(child, current_power());
 
 		usleep(sleep_duration);
 	}

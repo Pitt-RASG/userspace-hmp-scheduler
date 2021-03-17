@@ -60,7 +60,7 @@ void transfer_to_big(pid_t pid)
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid, predict_phase predictor)
+void scheduler_round(pid_t pid, int64_t power)
 {
 	static uint64_t g_cpu_cycles, g_inst_retired, g_l2d_cache, g_l2d_cache_refill, g_br_mis_pred;
 	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
@@ -88,7 +88,7 @@ void scheduler_round(pid_t pid, predict_phase predictor)
 
 	// match trained model format
 	// predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
-	printf("%lu %lu %lu %lu %lu\n", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred);
+	printf("%lu %lu %lu %lu %lu %lu\n", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, power);
 
         predicted_phase = (l2d_cache_refill*1000/inst_retired) > 1;
 
