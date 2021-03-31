@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 {
 	int run_scheduler = 1;
 
-	if (argc < 5) {
+	if (argc < 4) {
 		fprintf(stderr, "Usage: %s <run-scheduler> <big-core> <little-core> <program> [<args>...]\n", argv[0]);
 	}
 
@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
 
 	// Set up the execution barrier and get the child ready
 	setup_barrier();
-	spawn_child(run_scheduler, argv[0], argv, environ);
+	spawn_child(run_scheduler, argv[4], argv + 4, environ);
 	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
