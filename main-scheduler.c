@@ -231,7 +231,7 @@ static void sigchld_handler(int signal)
 	exit(0);
 }
 
-int scheduler_main(char *argv[], predict_phase cb)
+int main(int argc, char *argv[])
 {
 	// Set up the event list
 	parse_event_list(tracked_events, 0);

@@ -1,4 +1,4 @@
 *.o
 *.d
-libschedule.so
+schedule
 report
