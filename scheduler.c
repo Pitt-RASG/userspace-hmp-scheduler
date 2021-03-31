@@ -13,9 +13,9 @@ struct read_format *events = NULL;
 size_t num_counters = 0;
 size_t events_size = 0;
 
-static int little_cores[] = { 0, 1, 2, 3, 4, 5 };
-static int big_cores[]    = { 6, 7 };
-static int is_little      = 0;
+static int little_core = 0;
+static int big_core = 6;
+static int is_little = 0;
 
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -26,16 +26,18 @@ void transfer_to_little(pid_t pid)
 {
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
+	CPU_SET(little_core, &cpuset);
 
 	is_little = 1;
-
-	for (size_t i = 0; i < NELEM(little_cores); i++) {
-		CPU_SET(little_cores[i], &cpuset);
-	}
 
 	if (sched_setaffinity(pid, sizeof(cpuset), &cpuset) < 0) {
 		die("sched_setaffinity");
 	}
+}
+
+void set_little_core(int core_number)
+{
+	little_core = core_number;
 }
 
 /**
@@ -45,22 +47,24 @@ void transfer_to_big(pid_t pid)
 {
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
+	CPU_SET(big_core, &cpuset);
 
 	is_little = 0;
-
-	for (size_t i = 0; i < NELEM(big_cores); i++) {
-		CPU_SET(big_cores[i], &cpuset);
-	}
 
 	if (sched_setaffinity(pid, sizeof(cpuset), &cpuset) < 0) {
 		die("sched_setaffinity");
 	}
 }
 
+void set_big_core(int core_number)
+{
+	big_core = core_number;
+}
+
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid, int64_t power)
+void scheduler_round(pid_t pid, int64_t power, int run_scheduler)
 {
 	static uint64_t g_cpu_cycles, g_inst_retired, g_l2d_cache, g_l2d_cache_refill, g_br_mis_pred;
 	uint64_t cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred;
@@ -90,13 +94,14 @@ void scheduler_round(pid_t pid, int64_t power)
 	// predicted_phase = predictor(cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, is_little ? 0 : 4);
 	printf("%lu %lu %lu %lu %lu %lu\n", cpu_cycles, inst_retired, l2d_cache, l2d_cache_refill, br_mis_pred, power);
 
+	if (!run_scheduler)
+		return;
+
         predicted_phase = (l2d_cache_refill*1000/inst_retired) > 1;
 
 	if (predicted_phase >= 1 && !is_little) {
-		puts("little transfer");
 		transfer_to_little(pid);
 	} else if (predicted_phase < 1 && is_little) {
-		puts("big transfer");
 		transfer_to_big(pid);
 	}
 }

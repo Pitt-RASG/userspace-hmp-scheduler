@@ -155,7 +155,7 @@ static void setup_barrier()
  * Spawn the child process which will be run, wait on the barrier for events
  * to become enabled, and then execve() the child.
  */
-static void spawn_child(const char *pathname, char *const argv[], char *const envp[])
+static void spawn_child(int run_scheduler, const char *pathname, char *const argv[], char *const envp[])
 {
 	child = fork();
 
@@ -173,7 +173,9 @@ static void spawn_child(const char *pathname, char *const argv[], char *const en
 		}
 	}
 
-	transfer_to_little(child);
+	if (run_scheduler) {
+		transfer_to_little(child);
+	}
 }
 
 /**
@@ -233,15 +235,24 @@ static void sigchld_handler(int signal)
 
 int main(int argc, char *argv[])
 {
+	int run_scheduler = 1;
+
+	if (argc < 5) {
+		fprintf(stderr, "Usage: %s <run-scheduler> <big-core> <little-core> <program> [<args>...]\n", argv[0]);
+	}
+
 	// Set up the event list
 	parse_event_list(tracked_events, 0);
+	run_scheduler = atoi(argv[1]);
+	set_big_core(atoi(argv[2]));
+	set_little_core(atoi(argv[3]));
 
 	// 200 ms
 	sleep_duration = 200000;
 
 	// Set up the execution barrier and get the child ready
 	setup_barrier();
-	spawn_child(argv[0], argv, environ);
+	spawn_child(run_scheduler, argv[0], argv, environ);
 	signal(SIGCHLD, sigchld_handler);
 
 	// Configure the perf file descriptors
@@ -266,7 +277,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		scheduler_round(child, current_power());
+		scheduler_round(child, current_power(), run_scheduler);
 
 		usleep(sleep_duration);
 	}

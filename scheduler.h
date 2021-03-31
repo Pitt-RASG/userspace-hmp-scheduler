@@ -11,17 +11,19 @@ typedef int (*predict_phase)(long, long, long, long, long, int);
 /**
  * Read performance counter data from the child.
  */
-void scheduler_round(pid_t pid, int64_t power);
+void scheduler_round(pid_t pid, int64_t power, int run_scheduler);
 
 /**
  * Transfer to little core.
  */
 void transfer_to_little(pid_t pid);
+void set_little_core(int core_num);
 
 /**
  * Transfer to big core.
  */
 void transfer_to_big(pid_t pid);
+void set_big_core(int core_num);
 
 struct perf_info {
 	int fd;
